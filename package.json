@@ -1,0 +1,44 @@
+{
+  "name": "atelier-nord",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "bun run prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "admin:create": "bun run scripts/create-admin.ts",
+    "photos:fetch": "bun run scripts/fetch-sample-photos.ts fetch",
+    "photos:pick": "bun run scripts/fetch-sample-photos.ts pick",
+    "setup": "prisma generate && prisma migrate deploy && bun run prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.12",
+    "lightningcss": "^1.33.0",
+    "lucide-react": "^1.48.0",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "sharp": "^0.35.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "postcss": "^8.5.28",
+    "prisma": "6.19.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "5.9.3"
+  }
+}
