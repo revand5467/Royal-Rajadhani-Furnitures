@@ -26,7 +26,17 @@ export function ProductCard({
 
   return (
     <li className={cn("group relative", className)}>
-      <Link href={`/furniture/${product.slug}`} className="block focus-visible:outline-offset-4">
+      {/* prefetch={false} is deliberate. Product pages are force-dynamic, so a
+          prefetch is a full serverless render plus database queries, not a
+          cheap cache read. A nine-card grid therefore fired nine concurrent
+          renders on every page view, which saturated serverless concurrency
+          and starved the product images on the same connection. Clicking still
+          feels immediate — the page renders in roughly 0.3s. */}
+      <Link
+        href={`/furniture/${product.slug}`}
+        prefetch={false}
+        className="block focus-visible:outline-offset-4"
+      >
         <div className="relative aspect-4/5 w-full overflow-hidden bg-sand-200">
           <Media
             src={image?.url}
