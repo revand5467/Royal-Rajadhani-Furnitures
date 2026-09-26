@@ -365,27 +365,24 @@ Regardless of platform:
 1. **Strong `AUTH_SECRET`** — `openssl rand -base64 32`. The app hard-fails closed without one.
 2. **Change the demo admin password** (see §4) — the seed credentials are public.
 3. **`NEXT_PUBLIC_SITE_URL`** set to the real public URL (drives metadata, sitemap, share tags).
-4. **Postgres instead of SQLite** if you deploy on serverless or more than one instance:
-
-   ```diff
-   // prisma/schema.prisma
-   datasource db {
-   -  provider = "sqlite"
-   +  provider = "postgresql"
-     url      = env("DATABASE_URL")
-   }
-   ```
-
-   The schema uses no SQLite-specific features, so `npx prisma migrate deploy` applies the same
-   migrations to Postgres unchanged.
+4. **Postgres instead of SQLite** if you deploy on serverless or more than one instance — **the
+   schema already targets PostgreSQL** (provider + `directUrl` are configured; the committed
+   migration `20260926120000_postgres_init` creates the schema). Just point `DATABASE_URL` and
+   `DIRECT_URL` at your Postgres instance. (For a local SQLite sandbox, switch the provider back
+   to `"sqlite"` and use `file:./dev.db`.)
 5. **Persistent storage for uploads** if the filesystem is ephemeral (Vercel, most containers) —
-   see the storage-swap instructions in §10.2 step 5.
+   set the Supabase Storage variables (§10.2 step 4) or swap the driver in `src/lib/storage.ts`.
 
-### 10.2 Deploying to Vercel
+### 10.2 Deploying to Vercel (with Supabase)
 
 Vercel runs Next.js 16 natively (Turbopack builds, the `proxy` gate and server actions all work).
 What it does **not** give you: a persistent disk. SQLite and `UPLOAD_DIR` live on ephemeral
-storage, so you must move to Postgres + object storage. Plan ~30 minutes.
+storage, so this app ships ready for **Supabase Postgres + Supabase Storage** — the datasource is
+already Postgres and `src/lib/storage.ts` automatically switches to Supabase Storage when its
+credentials are present. Plan ~30 minutes.
+
+**Step 0 — Restore the Supabase project if it is paused.** Free-tier projects pause after a week
+of inactivity: Supabase dashboard → the project → *Restore project* (takes a couple of minutes).
 
 **Step 1 — Put the code on GitHub** (Vercel deploys from a repo):
 
@@ -395,93 +392,56 @@ git remote add origin https://github.com/<you>/rajadhani-furniture.git
 git push -u origin main
 ```
 
-**Step 2 — Create a Postgres database.** Easiest: [Neon](https://neon.tech) or
-[Supabase](https://supabase.com) (both have free tiers and Vercel integration; Vercel Marketplace
-can provision Neon directly from the Vercel dashboard). Copy the pooled connection string
-(`postgresql://…?sslmode=require`).
+**Step 2 — Collect the three Supabase connection values** (dashboard → Project Settings):
 
-**Step 3 — Switch the datasource.** Apply the diff from §10.1 step 4, set `DATABASE_URL` locally to
-the Neon string, and migrate + seed the cloud DB from your machine:
+| Value | Where | Used for |
+| --- | --- | --- |
+| **Pooled connection string** | Database → Connection string → *Connection pooling* (port **6543**) — append `&pgbouncer=true` | `DATABASE_URL` (app runtime) |
+| **Direct connection string** | Database → Connection string → *Direct connection* (port **5432**) | `DIRECT_URL` (migrations) |
+| **Project URL + service_role key** | API → *Project URL*, *service_role* secret | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (image uploads) |
+
+**Step 3 — Migrate + seed the cloud database from your machine** (fill the values into `.env`):
 
 ```bash
-npx prisma migrate deploy
-npx tsx prisma/seed.ts
+npx prisma migrate deploy            # applies prisma/migrations to Supabase Postgres
+npx tsx prisma/seed.ts               # optional demo catalogue
 npx tsx scripts/create-admin.ts "you@yourshop.com" "a-long-unique-password"
 ```
 
-(Seeding the demo catalogue is optional — skip it for a real shop and create products via the
-admin instead.)
-
-**Step 4 — Move image storage to Vercel Blob.**
-
-```bash
-npm i @vercel/blob
-```
-
-Rewrite the three functions in `src/lib/storage.ts` (signatures stay the same so the rest of the
-app doesn't change):
-
-```ts
-import { put, del, head } from "@vercel/blob";
-
-export async function storeImage(file: File, folder = "products"): Promise<StoredImage> {
-  // keep the existing magic-byte sniff + sharp WebP normalisation, then:
-  const { pathname } = await put(`${folder}/${crypto.randomUUID()}.webp`, webpBuffer, {
-    access: "public",
-    contentType: "image/webp",
-  });
-  return { url: pathname, width, height, bytes };
-}
-
-export async function openStoredImage(key: string) { … }      // not needed with direct URLs
-export async function deleteStoredImageByUrl(url: string) { await del(url); }
-```
-
-With Blob, `storeImage` returns the public CDN URL and images are served by Vercel's CDN directly,
-so:
-
-- delete `src/app/media/[...key]/route.ts` (no local serving anymore), and
-- in `src/lib/images.ts`, treat `*.public.blob.vercel-storage.com` URLs as stored uploads
-  (`isStoredUpload` / `canOptimize`) so the Next optimiser still picks them up.
-
-Keep `resolveKey` only if any local-upload path remains. Uploads then need
-`BLOB_READ_WRITE_TOKEN`, which Vercel injects automatically once you connect a Blob store
-(Vercel dashboard → Storage → Create Blob store → connect to the project).
+**Step 4 — Create the Storage bucket** (one-time): Supabase dashboard → Storage → *New bucket* →
+name it `media` and mark it **Public** (or let the app's first upload attempt tell you — the
+bucket is never created silently).
 
 **Step 5 — Import the repo in Vercel.**
 
-1. Vercel dashboard → *Add New…* → *Project* → import the GitHub repo.
-2. Framework preset: **Next.js** (auto-detected). Build command `npm run build`, output handled by
-   Next defaults — leave both untouched.
-3. Add a **postinstall** so the Prisma client is generated on Vercel's builder — in
-   `package.json`:
-
-   ```json
-   "scripts": { "postinstall": "prisma generate", … }
-   ```
-
-4. Environment variables (Project → Settings → Environment Variables):
+1. Vercel dashboard → *Add New…* → *Project* → import the GitHub repo (framework preset: Next.js,
+   build command `npm run build` — leave both untouched). The `postinstall` script already runs
+   `prisma generate` on Vercel's builder.
+2. Environment variables (Project → Settings → Environment Variables):
 
    | Name | Value |
    | --- | --- |
-   | `DATABASE_URL` | Neon/Supabase connection string |
+   | `DATABASE_URL` | pooled string (port 6543) + `?pgbouncer=true` |
+   | `DIRECT_URL` | direct string (port 5432) |
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service_role secret (**server-side only** — never expose it client-side) |
+   | `SUPABASE_STORAGE_BUCKET` | `media` |
    | `AUTH_SECRET` | `openssl rand -base64 32` output |
    | `NEXT_PUBLIC_SITE_URL` | `https://<your-domain>` (or the `*.vercel.app` URL first) |
-   | `BLOB_READ_WRITE_TOKEN` | injected automatically when the Blob store is linked |
+   | `MAX_UPLOAD_MB` | `4` — Vercel server actions cap at ~4.5 MB regardless of config |
    | `IMAGE_REMOTE_HOSTS` | only if admins paste external image URLs |
-   | `MAX_UPLOAD_MB` | `4` — see the Vercel caveat below |
 
-   ⚠️ **Vercel Server Action body limit is ~4.5 MB** regardless of `bodySizeLimit` in
-   `next.config.ts`. Keep `MAX_UPLOAD_MB=4`; large originals should be resized before upload.
-
-5. Deploy. First build applies nothing to the DB (migrations were already applied in step 3);
-   subsequent schema changes need a fresh `npx prisma migrate deploy` from your machine or CI.
+   With the Supabase URL + service key set, `storageMode()` flips to `"supabase"`: uploads go to
+   the bucket, images are served from `https://<ref>.supabase.co/storage/v1/object/public/media/…`,
+   and that host is allow-listed through the image optimiser automatically.
+3. Deploy.
 
 **Step 6 — Post-deploy checks.**
 
 - Visit `https://<app>.vercel.app` — homepage renders with seeded/created products.
 - `https://<app>.vercel.app/admin/login` — sign in with the account from step 3.
-- Upload one product image through the admin image manager and confirm it renders (proves Blob).
+- Upload one product image through the admin image manager and confirm it renders (proves the
+  Supabase Storage path end-to-end).
 - Submit a contact inquiry and check `/admin/inquiries`.
 
 **Vercel caveats worth knowing**
@@ -491,10 +451,9 @@ Keep `resolveKey` only if any local-upload path remains. Uploads then need
   signature is designed for exactly that swap).
 - **`next.config.ts` → `serverExternalPackages`** already lists `@prisma/client`, `bcryptjs`,
   `sharp`, which is what Vercel's Node runtime needs; no extra config.
-- **Prisma on Vercel serverless:** the generator's `binaryTargets = ["native", "windows"]` from
-  §8 also works for Vercel's `native` (Amazon Linux) — no extra target needed. Prisma 6.19 + the
-  standard driver work out of the box; consider Prisma Accelerate/PgBouncer-style pooling if you
-  exceed Neon's connection limits (use Neon's pooled endpoint first).
+- **DB-backed pages are `force-dynamic`** (home, about, contact, sitemap) so a paused Supabase
+  project or a DB blip can never break a Vercel build — the request fails loudly at runtime
+  instead of failing the deploy.
 - **Custom domain:** Vercel → Project → Domains → add domain, then update
   `NEXT_PUBLIC_SITE_URL` and redeploy so metadata/sitemap use the final URL.
 
