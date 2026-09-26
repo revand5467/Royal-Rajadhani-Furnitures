@@ -5,6 +5,9 @@ import { getSiteData, fullAddress } from "@/lib/settings";
 import { formatOpeningRange } from "@/lib/format";
 import { WEEKDAYS, WEEKDAY_ORDER } from "@/lib/constants";
 
+// Content is DB-backed; render on demand so builds never need the database.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Visit & contact",
   description:

@@ -3,6 +3,9 @@ import Link from "next/link";
 import { Media } from "@/components/ui/Media";
 import { getSiteData, fullAddress } from "@/lib/settings";
 
+// Content is DB-backed; render on demand so builds never need the database.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "About us",
   description:

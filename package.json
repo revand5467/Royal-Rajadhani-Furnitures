@@ -16,10 +16,12 @@
     "admin:create": "bun run scripts/create-admin.ts",
     "photos:fetch": "bun run scripts/fetch-sample-photos.ts fetch",
     "photos:pick": "bun run scripts/fetch-sample-photos.ts pick",
-    "setup": "prisma generate && prisma migrate deploy && bun run prisma/seed.ts"
+    "setup": "prisma generate && prisma migrate deploy && bun run prisma/seed.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
+    "@supabase/supabase-js": "^2.117.2",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "jose": "^6.2.12",

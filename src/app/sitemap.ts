@@ -1,6 +1,9 @@
 import type { MetadataRoute } from "next";
 import { getPublishedSlugs } from "@/lib/catalog";
 
+// Generated on demand so the build never needs the database.
+export const dynamic = "force-dynamic";
+
 const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

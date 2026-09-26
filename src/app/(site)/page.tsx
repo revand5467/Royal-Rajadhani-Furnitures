@@ -8,6 +8,11 @@ import { fullAddress, getSiteData } from "@/lib/settings";
 import { formatOpeningRange } from "@/lib/format";
 import { WEEKDAYS, WEEKDAY_ORDER } from "@/lib/constants";
 
+// Server-render on demand: the copy comes from the database, and a static
+// prerender at build time would fail when the database is unreachable (e.g. a
+// paused Supabase project) or go stale until the next deploy.
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const [site, featured, collections] = await Promise.all([
     getSiteData(),

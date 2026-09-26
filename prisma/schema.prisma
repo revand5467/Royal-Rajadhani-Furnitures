@@ -1,19 +1,24 @@
 // Rajadhani Furniture — furniture showcase data model.
 //
-// SQLite is the zero-configuration default so the project runs locally with no
-// external services. Enum-like columns are plain strings validated with zod
-// (SQLite has no native enums), which also makes the switch to PostgreSQL a
-// datasource change plus `prisma migrate deploy`.
+// PostgreSQL (Supabase) is the deployment default; SQLite still works locally
+// by pointing DATABASE_URL at a file and switching the provider back. Enum-like
+// columns are plain strings validated with zod so the schema stays portable.
 
 generator client {
   provider = "prisma-client-js"
-  // The checkout can be run from Windows or WSL; ship both query engines.
+  // The checkout can be run from Windows, WSL or CI; ship both query engines.
   binaryTargets = ["native", "windows"]
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  // Migrations run over the direct connection (DIRECT_URL); the app uses the
+  // pooled one (DATABASE_URL) so serverless functions don't exhaust Postgres
+  // connections. With Supabase: DATABASE_URL = pooler host + ?pgbouncer=true,
+  // DIRECT_URL = db.<project-ref>.supabase.co:5432. For plain Postgres (no
+  // pooler), set both to the same connection string.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model AdminUser {
